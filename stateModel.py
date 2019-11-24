@@ -5,6 +5,7 @@ import tronEnv
 import random
 import numpy as np
 from torch.utils.tensorboard import SummaryWriter
+import tronUtil
 
 def logModel(loss, reward, iteration, experiment):
     writer = SummaryWriter('runs/' + experiment)
@@ -38,7 +39,7 @@ class State_Trainer():
         # self.epsilon = self.initial_epsilon
         self.cycle_iteration = 0
         self.global_iteration = 0
-        self.replay_memory = []
+        self.replay_memory = tronUtil.readMemory('stateMemory')
 
     def init_weights(self):
         if type(self.model) == nn.Conv2d or type(self.model) == nn.Linear:
@@ -46,6 +47,8 @@ class State_Trainer():
             self.model.bias.data.fill_(self.initial_weights_setting)
 
     def train(self):
+
+        self.model.train()
 
         # define Adam optimizer
         optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
@@ -130,8 +133,36 @@ class State_Trainer():
         losses = np.array(losses)
         avgLoss = losses.mean()
 
+
         return avgLoss
 
+    def infer(self,action,state):
+
+        self.model.eval()
+
+        flatState = state.reshape(-1)
+        flatAction = action.reshape(-1)
+        model_input = torch.cat((flatState, flatAction)).unsqueeze(0).unsqueeze(0).unsqueeze(0)
+        output = self.model(model_input)
+
+        return output
+
+    def saveMemory(self):
+        tronUtil.saveMemory('stateMemory',self.replay_memory)
+
+    def uploadMemories(self,state,action,state_1):
+
+        flatState = state.reshape(-1)
+        flatAction = action.reshape(-1)
+        model_input = torch.cat((flatState, flatAction)).unsqueeze(0).unsqueeze(0).unsqueeze(0)
+        state_1_flat = state_1.reshape(-1).unsqueeze(0).unsqueeze(0).unsqueeze(0)
+
+        # save transition to replay memory
+        self.replay_memory.append((model_input, state_1_flat))
+
+        # if replay memory is full, remove the oldest transition
+        if len(self.replay_memory) > self.replay_memory_size:
+            self.replay_memory.pop(0)
 
 class State_Net(nn.Module):
 
