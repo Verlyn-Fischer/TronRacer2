@@ -128,8 +128,13 @@ class Reward_Trainer():
             reward_batch = torch.cat(tuple(d[2] for d in minibatch))
             state_1_batch = torch.cat(tuple(d[3] for d in minibatch))
 
-            # Build Target
-            y_batch = torch.cat(tuple(reward_batch[i] for i in range(len(minibatch))))
+            # get output for the next state
+            output_1_batch = self.model(state_1_batch)
+
+            # set y_j to r_j for terminal state, otherwise to r_j + gamma*max(Q)
+            y_batch = torch.cat(tuple(reward_batch[i] if minibatch[i][4]
+                                      else reward_batch[i] + self.gamma * torch.max(output_1_batch[i])
+                                      for i in range(len(minibatch))))
 
             # extract Q-value
             q_value = torch.sum(self.model(state_batch) * action_batch, dim=1)

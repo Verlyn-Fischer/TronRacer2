@@ -185,11 +185,11 @@ class State_Net(nn.Module):
 
         self.fc2 = nn.Linear(in_features=connect_1_2, out_features=connect_2_3)
         self.relu2 = nn.ReLU(inplace=True)
-        self.dropout2 = nn.Dropout(p=0.6)
+        self.dropout2 = nn.Dropout(p=0.2)
 
         self.fc3 = nn.Linear(in_features=connect_2_3, out_features=connect_3_4)
         self.relu3 = nn.ReLU(inplace=True)
-        self.dropout3 = nn.Dropout(p=0.6)
+        self.dropout3 = nn.Dropout(p=0.2)
 
         self.fc4 = nn.Linear(in_features=connect_3_4, out_features=field)
 

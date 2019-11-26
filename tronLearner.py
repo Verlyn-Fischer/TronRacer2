@@ -76,14 +76,13 @@ def trainingOrchestrator(config):
 
         for cycle in range(starting_cycle, starting_cycle + training_cycles):
 
-            print(f'Cycle {cycle} of {training_cycles}')
+            print(f'Cycle {cycle} of {starting_cycle + training_cycles}')
 
             # Train Rewards
             average_loss_reward = reward_trainer.train_withState(state_trainer)
             print('   Reward Training Using State Complete')
             average_reward = reward_trainer.test()
             print('   Reward Test Complete')
-            print(f'Reward Cycle {cycle} of {training_cycles}')
             tronUtil.logModel(average_loss_reward, average_reward, cycle, experiment, 'Reward')
             torch.save(reward_trainer.model, "reward_models/current_model_" + str(cycle) + ".pth")
 
@@ -105,17 +104,17 @@ def main():
     reward_trainer = rewardModel.Reward_Trainer()
     state_trainer = stateModel.State_Trainer()
 
-    trainConfiguration = {'StartingCycle' : 0,
-                          'NumberCycles' : 10,
+    trainConfiguration = {'StartingCycle' : 1,
+                          'NumberCycles' : 50,
                           'TrainingMode' : 'Co-train',
                           'Exploration' : 'Random',
-                          'StartingRewardModel' : 'current_model_0.pth',
-                          'StartingStateModel' : 'current_model_0.pth',
-                          'Experiment' : '_experiment_6',
+                          'StartingRewardModel' : 'current_model_X.pth',
+                          'StartingStateModel' : 'current_model_X.pth',
+                          'Experiment' : 'Co_Train2',
                           'RewardTrainer' : reward_trainer,
                           'StateTrainer': state_trainer}
-    # TrainingModes: Co-train, RewardOnly, StateOnly
-    # Exploration: Random, StateDriven
+    # TrainingModes: Co-train, RewardOnly, StateOnly, FixedState
+    # Exploration: Random, StateDriven  --- Not used
 
     trainingOrchestrator(trainConfiguration)
 
