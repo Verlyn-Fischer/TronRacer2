@@ -99,6 +99,39 @@ def trainingOrchestrator(config):
             tronUtil.logModel(average_loss_state, 0, cycle, experiment, 'State')
             torch.save(state_trainer.model, "state_models/current_model_" + str(cycle) + ".pth")
 
+    elif config['TrainingMode'] == 'StaticState':
+
+        reward_trainer = config['RewardTrainer']
+        state_trainer = config['StateTrainer']
+
+        if os.path.exists(config['StartingRewardModel']):
+            reward_trainer.trainer.model = torch.load(config['StartingRewardModel'], map_location='cpu').eval()
+        else:
+            reward_trainer.init_weights()
+
+        if os.path.exists(config['StartingStateModel']):
+            state_trainer.trainer.model = torch.load(config['StartingStateModel'], map_location='cpu').eval()
+        else:
+            state_trainer.init_weights()
+
+        # Set Reward Trainer Control Variables
+        reward_trainer.global_iteration = reward_trainer.iterations_between_validation * starting_cycle
+        reward_trainer.number_of_iterations = (starting_cycle + training_cycles) * reward_trainer.iterations_between_validation
+        reward_trainer.epsilon_decrements = np.linspace(reward_trainer.initial_epsilon, reward_trainer.final_epsilon,
+                                                 reward_trainer.number_of_iterations)
+
+        for cycle in range(starting_cycle, starting_cycle + training_cycles):
+
+            print(f'Cycle {cycle} of {starting_cycle + training_cycles}')
+
+            # Train Rewards
+            average_loss_reward = reward_trainer.train_withState(state_trainer)
+            print('   Reward Training Using Static State Complete')
+            average_reward = reward_trainer.test()
+            print('   Reward Test Complete')
+            tronUtil.logModel(average_loss_reward, average_reward, cycle, experiment, 'Reward')
+            torch.save(reward_trainer.model, "reward_models/current_model_" + str(cycle) + ".pth")
+
 def main():
 
     reward_trainer = rewardModel.Reward_Trainer()
@@ -106,14 +139,14 @@ def main():
 
     trainConfiguration = {'StartingCycle' : 1,
                           'NumberCycles' : 50,
-                          'TrainingMode' : 'Co-train',
+                          'TrainingMode' : 'StaticState',
                           'Exploration' : 'Random',
                           'StartingRewardModel' : 'current_model_X.pth',
-                          'StartingStateModel' : 'current_model_X.pth',
-                          'Experiment' : 'Co_Train2',
+                          'StartingStateModel' : 'current_model_50_best.pth',
+                          'Experiment' : 'Static2',
                           'RewardTrainer' : reward_trainer,
                           'StateTrainer': state_trainer}
-    # TrainingModes: Co-train, RewardOnly, StateOnly, FixedState
+    # TrainingModes: Co-train, RewardOnly, StateOnly, StaticState
     # Exploration: Random, StateDriven  --- Not used
 
     trainingOrchestrator(trainConfiguration)

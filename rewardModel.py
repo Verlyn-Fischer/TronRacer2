@@ -176,6 +176,122 @@ class Reward_Trainer():
 
         return avgLoss
 
+    def train_staticState(self,state_trainer):
+
+        # define Adam optimizer
+        optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
+
+        # initialize mean squared error loss
+        criterion = nn.MSELoss()
+
+        # instantiate game
+        env = tronEnv.Tron(self.env_field_size)
+
+        # get initial state
+        s1 = env.getState()
+
+        losses = []
+
+        self.cycle_iteration = 0
+
+        # main infinite loop
+        while self.cycle_iteration < self.iterations_between_validation:
+
+            # get output from the neural network
+            output = self.model(s1)[0]
+
+            action = torch.zeros([self.model.number_of_actions], dtype=torch.float32)
+
+            # epsilon greedy exploration
+            random_action = random.random() <= self.epsilon
+
+            if random_action:
+
+                currentDepth = 0
+                maxDepth = 2
+
+                bestReward, bestRewardIndex = self.rewardEstimate(state_trainer, s1, maxDepth, currentDepth, self.gamma)
+                action[bestRewardIndex] = 1
+
+            else:
+
+                action_index = [torch.argmax(output)][0]
+                action[action_index] = 1
+
+
+            # get next state and reward
+            s2, reward, terminal = env.step(action)
+
+            action = action.unsqueeze(0)
+            reward = torch.from_numpy(np.array([reward], dtype=np.float32)).unsqueeze(0)
+
+            # save transition to replay memory
+            self.replay_memory.append((s1, action, reward, s2, terminal))
+
+            # if replay memory is full, remove the oldest transition
+            if len(self.replay_memory) > self.replay_memory_size:
+                self.replay_memory.pop(0)
+
+            # epsilon annealing
+            self.epsilon = self.epsilon_decrements[self.global_iteration]
+
+            # sample random minibatch
+            minibatch = random.sample(self.replay_memory, min(len(self.replay_memory), self.minibatch_size))
+
+            # unpack minibatch
+            state_batch = torch.cat(tuple(d[0] for d in minibatch))
+            action_batch = torch.cat(tuple(d[1] for d in minibatch))
+            reward_batch = torch.cat(tuple(d[2] for d in minibatch))
+            state_1_batch = torch.cat(tuple(d[3] for d in minibatch))
+
+            # get output for the next state
+            output_1_batch = self.model(state_1_batch)
+
+            # set y_j to r_j for terminal state, otherwise to r_j + gamma*max(Q)
+            y_batch = torch.cat(tuple(reward_batch[i] if minibatch[i][4]
+                                      else reward_batch[i] + self.gamma * torch.max(output_1_batch[i])
+                                      for i in range(len(minibatch))))
+
+            # extract Q-value
+            q_value = torch.sum(self.model(state_batch) * action_batch, dim=1)
+
+            # PyTorch accumulates gradients by default, so they need to be reset in each pass
+            optimizer.zero_grad()
+
+            # returns a new Tensor, detached from the current graph, the result will never require gradient
+            y_batch = y_batch.detach()
+
+            # calculate loss
+            # From blog I read
+            loss = criterion(q_value, y_batch)
+            losses.append(loss.item())
+
+            # do backward pass
+            loss.backward()
+
+            # gradient clipping
+            if self.grad_clipping:
+                for param in self.model.parameters():
+                    param.grad.data.clamp_(-1, 1)
+
+            optimizer.step()
+
+            # If last state was terminal then reset environment and get state
+            # else set state to previous state
+            if terminal:
+                env.reset()
+                s1 = env.getState()
+            else:
+                s1 = s2
+
+            self.cycle_iteration += 1
+            self.global_iteration += 1
+
+        losses = np.array(losses)
+        avgLoss = losses.mean()
+
+        return avgLoss
+
     def train(self):
 
         self.model.train()
